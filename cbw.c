@@ -14,9 +14,14 @@ static Vault vault = {0};
 
 // ====================== PATH & HELPERS ======================
 static char *expand_path(const char *rel) {
-    static char buf[1024];
+    static char buf[2048];
     const char *home = getenv("HOME");
-    snprintf(buf, sizeof(buf), "%s%s", home, rel + 1);  // skip ~
+    if (home && rel[0] == '~') {
+        snprintf(buf, sizeof(buf), "%s%s", home, rel + 1);
+    } else {
+        strncpy(buf, rel, sizeof(buf)-1);
+        buf[sizeof(buf)-1] = '\0';
+    }
     return buf;
 }
 
@@ -26,6 +31,17 @@ static int derive_key(const char *pw, const unsigned char *salt, unsigned char *
                          salt, crypto_pwhash_OPSLIMIT_INTERACTIVE,
                          crypto_pwhash_MEMLIMIT_INTERACTIVE,
                          crypto_pwhash_ALG_ARGON2ID13);
+}
+
+void validate_password_characters(FILE* gen_stream) {
+    char c;
+    srand(time(NULL)); // Seed the random number generator
+    char replacement_char = rand() % 94 + 33; // Random printable ASCII character
+    while((c = fgetc(gen_stream)) != EOF) {
+        if (!isprint((unsigned char)c) || strchr((const char*)IGNORE_CHARS, c) != NULL) {
+            fputc(replacement_char, gen_stream);
+        }
+    }
 }
 
 static void copy_to_clipboard(const char *text) {
@@ -107,18 +123,21 @@ static int save_vault(Entry *entries, size_t count) {
 
     unsigned long long written;
     if (crypto_aead_xchacha20poly1305_ietf_encrypt(ct, &written,
-            (const unsigned char*)json_str, strlen(json_str),
+            (const unsigned char *)json_str, strlen(json_str),
             NULL, 0, NULL, nonce, vault.key) != 0) {
         free(ct); free(json_str); return -1;
     }
     free(json_str);
 
-    char *path = expand_path(VAULT_PATH);
+    char *path = expand_path("~/.config/cbw/vault");
     char tmp[1024];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);   // warning fixed by larger buffer if needed
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
 
     FILE *f = fopen(tmp, "wb");
-    if (!f) { free(ct); return -1; }
+    if (!f) {
+        perror("Failed to open temp file");
+        free(ct); return -1;
+    }
 
     fwrite(MAGIC, 1, MAGIC_LEN, f);
     fwrite(vault.salt, 1, SALT_LEN, f);
@@ -127,12 +146,18 @@ static int save_vault(Entry *entries, size_t count) {
     fclose(f);
 
     if (rename(tmp, path) != 0) {
+        perror("rename failed");
         unlink(tmp);
         free(ct);
         return -1;
     }
-    chmod(path, 0600);
+
+    if (chmod(path, 0600) != 0) {
+        perror("chmod failed");
+    }
+
     free(ct);
+    printf("Debug: Vault saved successfully (%zu entries)\n", count);
     return 0;
 }
 
@@ -250,9 +275,18 @@ int cmd_gen(int argc, char **argv)
         fprintf(stderr, "Usage: %s gen <words> [-u username] [-l label]\n", PROGRAM_NAME);
         return 1;
     }
+    int optind = 2;
+    int words = 0;
 
-    int words = atoi(argv[1]);           // "5" in your example → 5-word passphrase
-    if (words <= 0) words = 4;           // sensible default
+    //if there is no character count given, then default to DEFAULT_PWD_LEN
+    if(strtol(argv[1], NULL, 10) == 0){
+        words = DEFAULT_PWD_LEN;
+        optind = 1; // shift optind back to 1 since we didn't consume the first argument
+    } else {
+        words = atoi(argv[1]);
+    }
+    
+    if (words <= 0) words = DEFAULT_PWD_LEN;
 
     char username[128] = {0};
     char label[128] = {0};
@@ -264,9 +298,8 @@ int cmd_gen(int argc, char **argv)
         {0, 0, 0, 0}
     };
 
-    optind = 2; // skip "gen" and the number
     int opt;
-    while ((opt = getopt_long(argc, argv, "u:l:", long_opts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "u:l:", long_opts, &optind)) != -1) {
         switch (opt) {
             case 'u': strncpy(username, optarg, sizeof(username)-1); break;
             case 'l': strncpy(label,    optarg, sizeof(label)-1);    break;
@@ -294,6 +327,7 @@ int cmd_gen(int argc, char **argv)
         pclose(fp);
         return 1;
     }
+    validate_password_characters(fp);
     pclose(fp);
 
     // Trim newline
@@ -460,6 +494,8 @@ int cmd_list(int argc, char **argv)
     }
 
     printf("Entries (%zu):\n", count);
+    printf("Label           | Username\n");
+    printf("-----------------|-----------------\n");
     for (size_t i = 0; i < count; i++) {
         printf("  %s  |  %s\n", entries[i].label, entries[i].username);
     }

@@ -9,6 +9,8 @@
 #include <sodium.h>
 #include <getopt.h>
 #include "external/cJSON.h"
+#include <ctype.h>
+#include <time.h>
 
 #define RBW_PATH "/usr/bin/rbw"   /*rust bit warden binary*/
 #define GEN "generate"
@@ -18,6 +20,8 @@
 
 #define SUCCESS   (1)
 #define FAILURE  (2)
+
+#define DEFAULT_PWD_LEN   (15)
 
 #define MAX_CMD_SIZE (255)
 #define MAX_CMD_ARGS (10)
@@ -42,6 +46,8 @@
 
 #define VAULT_DIR      "~/.config/cbw"
 #define VAULT_FILE     "vault"
+
+const int IGNORE_CHARS[5] = {39, 40, 41, 46, 96};  // These are problematic characters
 
 // ====================== DATA MODEL ======================
 typedef struct {
