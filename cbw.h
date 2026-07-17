@@ -66,6 +66,7 @@ int cmd_gen(int argc, char **argv);
 int cmd_get(int argc, char **argv);
 int cmd_list(int argc, char **argv);
 int cmd_delete(int argc, char **argv);
+int cmd_insert(int argc, char **argv);
 
 char* encrypt_entry(const Entry *entry, const unsigned char *key, size_t key_len);
 char* decrypt_entry(const char *encrypted, const unsigned char *key, size_t key_len);
@@ -85,6 +86,7 @@ static const struct command commands[] = {
     {"init",    "Initialize encrypted vault (set master password)", cmd_init},
     {"gen",     "Generate password via rbw and store encrypted",    cmd_gen},
     {"get",     "Retrieve and reveal a password",                   cmd_get},
+    {"insert",  "Insert a new entry into the vault",                cmd_insert},
     {"list",    "List all entries (labels + usernames)",            cmd_list},
     {"delete",  "Delete an entry",                                  cmd_delete},
     {"help",    "Show this help",                                   cmd_help},

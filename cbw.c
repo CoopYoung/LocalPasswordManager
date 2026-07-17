@@ -77,7 +77,7 @@ static Entry *json_to_entries(cJSON *root, size_t *out_count) {
 
 // ====================== ENCRYPT / DECRYPT CORE ======================
 static int load_salt(void) {
-    char *path = expand_path("~/.config/cbw/vault");
+    char *path = expand_path(VAULT_PATH);
     FILE *f = fopen(path, "rb");
     if (!f) return -1;
 
@@ -113,7 +113,7 @@ static int save_vault(Entry *entries, size_t count) {
     }
     free(json_str);
 
-    char *path = expand_path("~/.config/cbw/vault");
+    char *path = expand_path(VAULT_PATH);
     char tmp[1024];
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);   // warning fixed by larger buffer if needed
 
@@ -138,7 +138,7 @@ static int save_vault(Entry *entries, size_t count) {
 
 static Entry *load_vault(size_t *out_count) {
     *out_count = 0;
-    char *path = expand_path("~/.config/cbw/vault");
+    char *path = expand_path(VAULT_PATH);
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
     
@@ -395,7 +395,51 @@ int cmd_get(int argc, char **argv)
     free(entries);
     return 1;
 }
+int cmd_insert(int argc, char **argv)
+{
+    if (argc < 4) {
+        fprintf(stderr, "Usage: %s insert <label> <username> <password>\n", PROGRAM_NAME);
+        return 1;
+    }
 
+    const char *label = argv[1];
+    const char *username = argv[2];
+    const char *password = argv[3];
+
+    if (unlock_vault() != 0) return 1;
+
+    size_t count = 0;
+    Entry *entries = load_vault(&count);
+    if (!entries) {
+        entries = malloc(sizeof(Entry));
+        count = 0;
+    }
+
+    // Resize array
+    entries = realloc(entries, (count + 1) * sizeof(Entry));
+    if (!entries) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return 1;
+    }
+    Entry *new_e = &entries[count];
+    strncpy(new_e->label, label, sizeof(new_e->label) - 1);
+    new_e->label[sizeof(new_e->label)-1] = '\0';
+
+    strncpy(new_e->username, username, sizeof(new_e->username) - 1);
+    new_e->username[sizeof(new_e->username)-1] = '\0';
+
+    strncpy(new_e->password, password, sizeof(new_e->password) - 1);
+    new_e->password[sizeof(new_e->password)-1] = '\0';
+
+    if (save_vault(entries, count + 1) == 0) {
+        printf("Inserted entry for %s\n", label);
+    } else {
+        fprintf(stderr, "Failed to save vault\n");
+    }
+    free(entries);
+
+    return 0;
+}
 int cmd_list(int argc, char **argv)
 {
     (void)argc; (void)argv;
@@ -429,7 +473,35 @@ int cmd_delete(int argc, char **argv)
         fprintf(stderr, "Usage: %s delete <label>\n", PROGRAM_NAME);
         return 1;
     }
-    printf("Would delete entry '%s'\n", argv[1]);
+
+    if(unlock_vault() != 0) return 1;
+
+    size_t count = 0;
+    Entry *entries = load_vault(&count);
+    if (!entries || count == 0) {
+        printf("No entries in vault.\n");
+        free(entries);
+        return 0;
+    }
+
+    for(int pw_entry = 0; pw_entry < count; pw_entry++) {
+        if(strcmp(entries[pw_entry].label, argv[1]) == 0) {
+            // Shift remaining entries down
+            for(int j = pw_entry; j < count - 1; j++) {
+                entries[j] = entries[j + 1];
+            }
+            count--;
+            if(save_vault(entries, count) == 0) {
+                printf("Deleted entry '%s'\n", argv[1]);
+            } else {
+                fprintf(stderr, "Failed to save vault after deletion\n");
+            }
+            free(entries);
+            return 0;
+        }
+    }
+    printf("Entry '%s' not found\n", argv[1]);
+    free(entries);
     return 0;
 }
 
