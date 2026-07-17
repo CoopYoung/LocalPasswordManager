@@ -6,6 +6,7 @@ clipboard copying, random password generation, vault safeguarding, customized pa
 ### Installation
 
 ``` apt install rbw libsodium-dev xclip wl-clipboard ```
+
 ``` make ```
 
 ### Helpful commands
@@ -14,21 +15,13 @@ I created a symlink so this can be run inside any directory on your Linux machin
 
 To create the vault: ``` cbw init ``` 
 
-`
-Commands:
-  init       Initialize encrypted vault (set master password)
-  gen        Generate password via rbw and store encrypted
-  get        Retrieve and reveal a password
-  insert     Insert a new entry into the vault
-  list       List all entries (labels + usernames)
-  delete     Delete an entry
-  help       Show this help
-  version    Show version
-
-Examples:
-  cbw init
-  cbw gen 5 -u HappyFeather -l feathers.com
-  cbw get -c feathers.com                      # copy password to clipboard
-  cbw get helloworld
-  cbw list
-`
+Main Commands:
+<code>
+          init       Initialize encrypted vault (set master password)
+          gen        Generate password via rbw and store encrypted
+          get        Retrieve and reveal a password
+          insert     Insert a new entry into the vault
+          list       List all entries (labels + usernames)
+          delete     Delete an entry
+          help       Show this help
+          version    Show version</code> 
