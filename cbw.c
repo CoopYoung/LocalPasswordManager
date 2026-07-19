@@ -62,6 +62,29 @@ static void copy_to_clipboard(const char *text) {
     }
 }
 
+static char* rbw_generate(int words)
+{
+// === Generate password using rbw ===
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), RBW_PATH " " GEN " %d", words);
+
+    FILE *fp = popen(cmd, "r");
+    if (!fp) {
+        perror("popen rbw generate");
+        return NULL;
+    }
+
+    char* generated = (char*)malloc(256 * sizeof(char));
+    if (!fgets(generated, sizeof(generated), fp)) {
+        fprintf(stderr, "Failed to read password from rbw\n");
+        pclose(fp);
+        return NULL;
+    }
+    validate_password_characters(fp);
+    pclose(fp);
+
+    return generated;
+}
 // ====================== JSON SERIALIZATION ======================
 static cJSON *entries_to_json(const Entry *entries, size_t count) {
     cJSON *root = cJSON_CreateArray();
@@ -311,24 +334,13 @@ int cmd_gen(int argc, char **argv)
         return 1;
     }
 
-    // === Generate password using rbw ===
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), RBW_PATH " " GEN " %d", words);
-
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
-        perror("popen rbw generate");
+    char* generated = rbw_generate(words);
+    if(generated == NULL)
+    {
+        fprintf(stderr, "Error generating a new password, try again\n");
+        free(generated);
         return 1;
     }
-
-    char generated[256] = {0};
-    if (!fgets(generated, sizeof(generated), fp)) {
-        fprintf(stderr, "Failed to read password from rbw\n");
-        pclose(fp);
-        return 1;
-    }
-    validate_password_characters(fp);
-    pclose(fp);
 
     // Trim newline
     generated[strcspn(generated, "\n")] = 0;
@@ -339,6 +351,7 @@ int cmd_gen(int argc, char **argv)
     {
         fprintf(stderr, "Failed to unlock vault.\n");
         sodium_memzero(generated, sizeof(generated));
+        if(generated != NULL) free(generated);
         return 1;
     }
 
@@ -355,6 +368,7 @@ int cmd_gen(int argc, char **argv)
     if (!entries) {
         fprintf(stderr, "Memory allocation failed\n");
         sodium_memzero(generated, sizeof(generated));
+        if(generated != NULL) free(generated);
         return 1;
     }
     Entry *new_e = &entries[count];
@@ -377,6 +391,7 @@ int cmd_gen(int argc, char **argv)
 
     // Security: wipe sensitive memory
     sodium_memzero(generated, sizeof(generated));
+    if(generated != NULL) free(generated);
     return 0;
 }
 
@@ -503,6 +518,52 @@ int cmd_list(int argc, char **argv)
     return 0;
 }
 
+int cmd_edit(int argc, char **argv)
+{
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s edit <label>\n", PROGRAM_NAME);
+        return 1;
+    }
+
+    if(unlock_vault() != 0) return 1;
+
+    size_t count = 0;
+    Entry *entries = load_vault(&count);
+    if (!entries || count == 0) {
+        printf("No entries in vault.\n");
+        free(entries);
+        return 0;
+    }
+
+    for(int pw_entry = 0; pw_entry < count; pw_entry++) 
+    {
+        if(strcmp(entries[pw_entry].label, argv[1]) == 0) 
+        {
+            char* generated = rbw_generate(DEFAULT_PWD_LEN);
+            if(generated == NULL) 
+            {
+                fprintf(stderr, "Error editing a new password, try again\n");
+                free(generated);
+                free(entries);
+                return 0;
+            }
+
+            strncpy(entries[pw_entry].password, generated, sizeof(entries->password) - 1);
+            entries[pw_entry].password[sizeof(entries[pw_entry].password)-1] = '\0';
+
+            if (save_vault(entries, count) == 0) {
+                printf("Edited entry for %s\n", entries[pw_entry].label);
+            }
+            //Combining success path with error path. Free and return
+            if(generated != NULL) free(generated);
+            free(entries);
+            return 0;
+
+        }
+    }
+    fprintf(stderr, "No previous entry exists to edit!\n");
+    return 0;
+}
 int cmd_delete(int argc, char **argv)
 {
     if (argc < 2) {

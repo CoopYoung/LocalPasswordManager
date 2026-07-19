@@ -71,6 +71,7 @@ int cmd_init(int argc, char **argv);
 int cmd_gen(int argc, char **argv);
 int cmd_get(int argc, char **argv);
 int cmd_list(int argc, char **argv);
+int cmd_edit(int argc, char **argv);
 int cmd_delete(int argc, char **argv);
 int cmd_insert(int argc, char **argv);
 
@@ -94,6 +95,7 @@ static const struct command commands[] = {
     {"get",     "Retrieve and reveal a password",                   cmd_get},
     {"insert",  "Insert a new entry into the vault",                cmd_insert},
     {"list",    "List all entries (labels + usernames)",            cmd_list},
+    {"edit",    "Edit a password, provided a label",                cmd_edit},
     {"delete",  "Delete an entry",                                  cmd_delete},
     {"help",    "Show this help",                                   cmd_help},
     {"version", "Show version",                                     cmd_version},
