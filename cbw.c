@@ -25,6 +25,33 @@ static char *expand_path(const char *rel) {
     return buf;
 }
 
+static time_t parse_date_string(const char *date_str, const char *format) {
+    struct tm tm = {0}; // Initialize to zero
+    
+    // Parse the string
+    if (strptime(date_str, format, &tm) == NULL) {
+        return -1; // Parsing failed
+    }
+    
+    // Normalize for day calculation (Noon avoids DST edge cases)
+    tm.tm_hour = 12;
+    tm.tm_min = 0;
+    tm.tm_sec = 0;
+    tm.tm_isdst = -1; 
+    
+    return mktime(&tm);
+}
+
+static long days_elapsed(const char *date1, const char *date2, const char *fmt) {
+    time_t t1 = parse_date_string(date1, fmt);
+    time_t t2 = parse_date_string(date2, fmt);
+    
+    if (t1 == -1 || t2 == -1) return -1;
+    
+    double seconds = difftime(t2, t1);
+    return (long)round(seconds / 86400.0);
+}
+
 static int derive_key(const char *pw, const unsigned char *salt, unsigned char *key) {
     if (sodium_init() < 0) return -1;
     return crypto_pwhash(key, KEY_LEN, pw, strlen(pw),
@@ -93,6 +120,8 @@ static cJSON *entries_to_json(const Entry *entries, size_t count) {
         cJSON_AddStringToObject(obj, "label", entries[i].label);
         cJSON_AddStringToObject(obj, "username", entries[i].username);
         cJSON_AddStringToObject(obj, "password", entries[i].password);
+        cJSON_AddStringToObject(obj, "time_created", entries[i].time_created);
+        cJSON_AddNumberToObject(obj, "days_old", entries[i].days_old);
         cJSON_AddItemToArray(root, obj);
     }
     return root;
@@ -109,6 +138,9 @@ static Entry *json_to_entries(cJSON *root, size_t *out_count) {
         strncpy(entries[i].label, cJSON_GetStringValue(cJSON_GetObjectItem(item, "label")), 127);
         strncpy(entries[i].username, cJSON_GetStringValue(cJSON_GetObjectItem(item, "username")), 127);
         strncpy(entries[i].password, cJSON_GetStringValue(cJSON_GetObjectItem(item, "password")), 255);
+        strncpy(entries[i].time_created, cJSON_GetStringValue(cJSON_GetObjectItem(item, "time_created")), TIME_LEN);
+        cJSON *days_old = cJSON_GetObjectItem(root, "days_old");
+        if(days_old) entries[i].days_old = (long)days_old->valueint;
     }
     *out_count = count;
     return entries;
@@ -535,7 +567,7 @@ int cmd_edit(int argc, char **argv)
         return FAILURE;
     }
 
-    for(int pw_entry = 0; pw_entry < count; pw_entry++) 
+    for(size_t pw_entry = 0; pw_entry < count; pw_entry++) 
     {
         if(strcmp(entries[pw_entry].label, argv[1]) == 0) 
         {
@@ -581,7 +613,7 @@ int cmd_delete(int argc, char **argv)
         return FAILURE;
     }
 
-    for(int pw_entry = 0; pw_entry < count; pw_entry++) {
+    for(size_t pw_entry = 0; pw_entry < count; pw_entry++) {
         if(strcmp(entries[pw_entry].label, argv[1]) == 0) {
             // Shift remaining entries down
             for(int j = pw_entry; j < count - 1; j++) {
@@ -616,6 +648,39 @@ int cmd_audit(int argc, char **argv)
         free(entries);
         return FAILURE;
     }
+
+    time_t rawtime = time(NULL);
+    struct tm* curr_time = localtime(&rawtime);;
+    char time_buffer[TIME_LEN];
+
+    const char* time_fmt = "%Y-%m-%d";
+    strftime(time_buffer, TIME_LEN, time_fmt, curr_time);
+    for(size_t e = 0; e < count; e++)
+    {
+        if(entries[e].time_created == NULL)
+        {
+            strcpy(entries[e].time_created, time_buffer);
+            entries[e].days_old = 0L; 
+            if (save_vault(entries, count) == 0) {
+                printf("Created time entry for %s\n", entries[e].label);
+            }
+            continue;
+        }
+
+        //For security reasons, update the password, reset the time created 
+        if(days_elapsed(entries[e].time_created, time_buffer, time_fmt) >= DAYS_OLD_LIMIT)
+        {
+            char* generated = rbw_generate(DEFAULT_PWD_LEN);
+            strcpy(entries[e].password, generated);
+            strcpy(entries[e].time_created, time_buffer);
+            entries[e].days_old = 0L;
+            free(generated);
+            if (save_vault(entries, count) == 0) {
+                printf("Audited entry: %s, password was too old !\n", entries[e].label);
+            }
+        }
+    }
+    return SUCCESS;
 }
 // ====================== Encrypt ======================
 

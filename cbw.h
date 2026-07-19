@@ -25,6 +25,7 @@
 
 #define MAX_CMD_SIZE (255)
 #define MAX_CMD_ARGS (10)
+#define TIME_LEN     (80)
 #define UNAME_FLAG "-u"
 #define URL_FLAG "-l"
 #define HELP_FLAG "-h"
@@ -48,6 +49,7 @@
 #define VAULT_FILE     "vault"
 #define VAULT_FAILURE  2
 
+#define DAYS_OLD_LIMIT  60
 const int IGNORE_CHARS[5] = {39, 40, 41, 46, 96};  // These are problematic characters
 
 // ====================== DATA MODEL ======================
@@ -55,6 +57,8 @@ typedef struct {
     char label[128];
     char username[128];
     char password[256];   // plaintext only while in memory
+    char time_created[TIME_LEN];
+    long days_old;
     // TODO: add created, notes, etc.
 } Entry;
 
