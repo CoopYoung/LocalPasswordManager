@@ -46,6 +46,7 @@
 
 #define VAULT_DIR      "~/.config/cbw"
 #define VAULT_FILE     "vault"
+#define VAULT_FAILURE  2
 
 const int IGNORE_CHARS[5] = {39, 40, 41, 46, 96};  // These are problematic characters
 

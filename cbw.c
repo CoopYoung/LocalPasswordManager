@@ -280,7 +280,7 @@ int cmd_init(int argc, char **argv)
     if (strcmp(pw, confirm) != 0) {
         fprintf(stderr, "Mismatch\n");
         sodium_memzero(pw, sizeof(pw));
-        return 1;
+        return FAILURE;
     }
 
     derive_key(pw, vault.salt, vault.key);  // salt generated inside
@@ -289,14 +289,14 @@ int cmd_init(int argc, char **argv)
     save_vault(NULL, 0);  // empty vault
     vault.unlocked = 1;
     printf("Vault initialized at %s\n", expand_path(VAULT_DIR "/" VAULT_FILE));
-    return 0;
+    return SUCCESS;
 }
 
 int cmd_gen(int argc, char **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s gen <words> [-u username] [-l label]\n", PROGRAM_NAME);
-        return 1;
+        return FAILURE;
     }
     int optind = 2;
     int words = 0;
@@ -331,7 +331,7 @@ int cmd_gen(int argc, char **argv)
 
     if (label[0] == 0) {
         fprintf(stderr, "Error: label (-l) is required\n");
-        return 1;
+        return FAILURE;
     }
 
     char* generated = rbw_generate(words);
@@ -339,7 +339,7 @@ int cmd_gen(int argc, char **argv)
     {
         fprintf(stderr, "Error generating a new password, try again\n");
         free(generated);
-        return 1;
+        return FAILURE;
     }
 
     // Trim newline
@@ -352,7 +352,7 @@ int cmd_gen(int argc, char **argv)
         fprintf(stderr, "Failed to unlock vault.\n");
         sodium_memzero(generated, sizeof(generated));
         if(generated != NULL) free(generated);
-        return 1;
+        return FAILURE;
     }
 
     size_t count = 0;
@@ -369,7 +369,7 @@ int cmd_gen(int argc, char **argv)
         fprintf(stderr, "Memory allocation failed\n");
         sodium_memzero(generated, sizeof(generated));
         if(generated != NULL) free(generated);
-        return 1;
+        return FAILURE;
     }
     Entry *new_e = &entries[count];
     strncpy(new_e->label, label, sizeof(new_e->label) - 1);
@@ -392,7 +392,7 @@ int cmd_gen(int argc, char **argv)
     // Security: wipe sensitive memory
     sodium_memzero(generated, sizeof(generated));
     if(generated != NULL) free(generated);
-    return 0;
+    return SUCCESS;
 }
 
 int cmd_get(int argc, char **argv)
@@ -412,17 +412,17 @@ int cmd_get(int argc, char **argv)
 
     if (label[0] == 0) {
         fprintf(stderr, "Usage: %s get [-c|--clip] <label>\n", PROGRAM_NAME);
-        return 1;
+        return FAILURE;
     }
 
-    if (unlock_vault() != 0) return 1;
+    if (unlock_vault() != 0) return FAILURE;
 
     size_t count = 0;
     Entry *entries = load_vault(&count);
     if (!entries || count == 0) {
         fprintf(stderr, "No entries found or vault empty.\n");
         free(entries);
-        return 1;
+        return SUCCESS;
     }
     
     for (size_t i = 0; i < count; i++) {
@@ -436,26 +436,26 @@ int cmd_get(int argc, char **argv)
             }
             sodium_memzero(entries[i].password, sizeof(entries[i].password));
             free(entries);
-            return 0;
+            return SUCCESS;
         }
     }
 
     fprintf(stderr, "Entry '%s' not found.\n", label);
     free(entries);
-    return 1;
+    return FAILURE;
 }
 int cmd_insert(int argc, char **argv)
 {
     if (argc < 4) {
         fprintf(stderr, "Usage: %s insert <label> <username> <password>\n", PROGRAM_NAME);
-        return 1;
+        return FAILURE;
     }
 
     const char *label = argv[1];
     const char *username = argv[2];
     const char *password = argv[3];
 
-    if (unlock_vault() != 0) return 1;
+    if (unlock_vault() != 0) return FAILURE;
 
     size_t count = 0;
     Entry *entries = load_vault(&count);
@@ -468,7 +468,7 @@ int cmd_insert(int argc, char **argv)
     entries = realloc(entries, (count + 1) * sizeof(Entry));
     if (!entries) {
         fprintf(stderr, "Memory allocation failed\n");
-        return 1;
+        return FAILURE;
     }
     Entry *new_e = &entries[count];
     strncpy(new_e->label, label, sizeof(new_e->label) - 1);
@@ -487,7 +487,7 @@ int cmd_insert(int argc, char **argv)
     }
     free(entries);
 
-    return 0;
+    return SUCCESS;
 }
 int cmd_list(int argc, char **argv)
 {
@@ -495,7 +495,7 @@ int cmd_list(int argc, char **argv)
 
         if (argc >= 2) {
         fprintf(stderr, "Usage: %s list\n", PROGRAM_NAME);
-        return 1;
+        return FAILURE;
     }
 
     if (unlock_vault() != 0) return 1;
@@ -505,7 +505,7 @@ int cmd_list(int argc, char **argv)
     if (!entries || count == 0) {
         printf("No entries in vault.\n");
         free(entries);
-        return 0;
+        return FAILURE;
     }
 
     printf("Entries (%zu):\n", count);
@@ -515,14 +515,14 @@ int cmd_list(int argc, char **argv)
         printf("  %s  |  %s\n", entries[i].label, entries[i].username);
     }
     free(entries);
-    return 0;
+    return SUCCESS;
 }
 
 int cmd_edit(int argc, char **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s edit <label>\n", PROGRAM_NAME);
-        return 1;
+        return FAILURE;
     }
 
     if(unlock_vault() != 0) return 1;
@@ -532,7 +532,7 @@ int cmd_edit(int argc, char **argv)
     if (!entries || count == 0) {
         printf("No entries in vault.\n");
         free(entries);
-        return 0;
+        return FAILURE;
     }
 
     for(int pw_entry = 0; pw_entry < count; pw_entry++) 
@@ -545,7 +545,7 @@ int cmd_edit(int argc, char **argv)
                 fprintf(stderr, "Error editing a new password, try again\n");
                 free(generated);
                 free(entries);
-                return 0;
+                return FAILURE;
             }
 
             strncpy(entries[pw_entry].password, generated, sizeof(entries->password) - 1);
@@ -557,7 +557,7 @@ int cmd_edit(int argc, char **argv)
             //Combining success path with error path. Free and return
             if(generated != NULL) free(generated);
             free(entries);
-            return 0;
+            return SUCCESS;
 
         }
     }
@@ -571,14 +571,14 @@ int cmd_delete(int argc, char **argv)
         return 1;
     }
 
-    if(unlock_vault() != 0) return 1;
+    if(unlock_vault() != 0) return FAILURE;
 
     size_t count = 0;
     Entry *entries = load_vault(&count);
     if (!entries || count == 0) {
         printf("No entries in vault.\n");
         free(entries);
-        return 0;
+        return FAILURE;
     }
 
     for(int pw_entry = 0; pw_entry < count; pw_entry++) {
@@ -594,14 +594,29 @@ int cmd_delete(int argc, char **argv)
                 fprintf(stderr, "Failed to save vault after deletion\n");
             }
             free(entries);
-            return 0;
+            return SUCCESS;
         }
     }
     printf("Entry '%s' not found\n", argv[1]);
     free(entries);
-    return 0;
+    return FAILURE;
 }
 
+int cmd_audit(int argc, char **argv)
+{
+    //no added arguments: cbw audit
+    (void)argc; (void)argv;
+
+    if(unlock_vault() != 0) return FAILURE;
+
+    size_t count = 0;
+    Entry *entries = load_vault(&count);
+    if (!entries || count == 0) {
+        printf("No entries in vault.\n");
+        free(entries);
+        return FAILURE;
+    }
+}
 // ====================== Encrypt ======================
 
 unsigned char* encryptKey(const char *password, const unsigned char *key)
@@ -699,7 +714,7 @@ int main(int argc, char* argv[])
     
     if (argc < 2) {
         print_usage();
-        return EXIT_FAILURE;
+        return FAILURE;
     }
 
     const char *subcmd = argv[1];
@@ -707,11 +722,11 @@ int main(int argc, char* argv[])
     // Global flags
     if (strcmp(subcmd, "--help") == 0 || strcmp(subcmd, "-h") == 0) {
         print_usage();
-        return EXIT_SUCCESS;
+        return SUCCESS;
     }
     if (strcmp(subcmd, "--version") == 0 || strcmp(subcmd, "-V") == 0) {
         print_version();
-        return EXIT_SUCCESS;
+        return SUCCESS;
     }
 
     for (int i = 0; commands[i].name != NULL; i++) {
@@ -722,6 +737,6 @@ int main(int argc, char* argv[])
 
     fprintf(stderr, "%s: unknown command '%s'\n", PROGRAM_NAME, subcmd);
     fprintf(stderr, "Run '%s help' for usage.\n", PROGRAM_NAME);
-    return EXIT_SUCCESS;
+    return SUCCESS;
     
 }
