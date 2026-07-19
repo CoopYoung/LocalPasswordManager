@@ -11,6 +11,7 @@
 #include "external/cJSON.h"
 #include <ctype.h>
 #include <time.h>
+#include <math.h> 
 
 #define RBW_PATH "/usr/bin/rbw"   /*rust bit warden binary*/
 #define GEN "generate"
@@ -79,6 +80,7 @@ int cmd_list(int argc, char **argv);
 int cmd_edit(int argc, char **argv);
 int cmd_delete(int argc, char **argv);
 int cmd_insert(int argc, char **argv);
+int cmd_audit(int argc, char **argv);
 
 char* encrypt_entry(const Entry *entry, const unsigned char *key, size_t key_len);
 char* decrypt_entry(const char *encrypted, const unsigned char *key, size_t key_len);
@@ -102,6 +104,7 @@ static const struct command commands[] = {
     {"list",    "List all entries (labels + usernames)",            cmd_list},
     {"edit",    "Edit a password, provided a label",                cmd_edit},
     {"delete",  "Delete an entry",                                  cmd_delete},
+    {"audit",   "Checks the health of each pwd, updates if too old",cmd_audit},
     {"help",    "Show this help",                                   cmd_help},
     {"version", "Show version",                                     cmd_version},
     {NULL, NULL, NULL}

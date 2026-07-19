@@ -9,6 +9,8 @@
  *        cbw gen <length> -u <username> -l <url>
 */
 
+/*MACROS*/
+#define SYNC 0
 /*Global variables*/
 static Vault vault = {0};
 
@@ -295,6 +297,28 @@ static int unlock_vault(void) {
     return 0;
 }
 
+static int synchronize_vault(void) {
+    size_t count = 0;
+    Entry *entry = load_vault(&count);
+
+    if(count == 0 || !entry)
+    {
+        free(entry);
+        printf("Sync is failing\n");
+        return FAILURE;
+    } 
+
+    for(size_t e = 0; e < count; e++)
+    {
+        strcpy(entry[e].time_created, "");
+        entry[e].days_old = 0;
+        if(save_vault(entry, count) == 0)
+        {
+            printf("Synching the new struct variables: %d\n", (int)count);
+        }
+    }
+    return SUCCESS;
+}
 // ====================== COMMAND TABLE ======================
 int cmd_help(int argc, char **argv) { (void)argc; (void)argv; print_usage(); return 0; }
 int cmd_version(int argc, char **argv) { (void)argc; (void)argv; print_version(); return 0; }
@@ -616,7 +640,7 @@ int cmd_delete(int argc, char **argv)
     for(size_t pw_entry = 0; pw_entry < count; pw_entry++) {
         if(strcmp(entries[pw_entry].label, argv[1]) == 0) {
             // Shift remaining entries down
-            for(int j = pw_entry; j < count - 1; j++) {
+            for(size_t j = pw_entry; j < count - 1; j++) {
                 entries[j] = entries[j + 1];
             }
             count--;
@@ -657,7 +681,7 @@ int cmd_audit(int argc, char **argv)
     strftime(time_buffer, TIME_LEN, time_fmt, curr_time);
     for(size_t e = 0; e < count; e++)
     {
-        if(entries[e].time_created == NULL)
+        if(strcmp(entries[e].time_created, "") == 0)
         {
             strcpy(entries[e].time_created, time_buffer);
             entries[e].days_old = 0L; 
@@ -782,6 +806,11 @@ int main(int argc, char* argv[])
         return FAILURE;
     }
 
+    if(SYNC)
+    {
+        int s = synchronize_vault();
+        if(s != SUCCESS) return FAILURE;
+    }
     const char *subcmd = argv[1];
 
     // Global flags

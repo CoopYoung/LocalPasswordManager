@@ -1,6 +1,6 @@
 CC := gcc
 CFLAGS := -Wall -Wextra -Wpedantic -std=c11 -O2 -g -Iexternal
-LDFLAGS := -lsodium
+LDFLAGS := -lsodium -lm
 
 TARGET := cbw
 SRCS     := cbw.c external/cJSON.c
