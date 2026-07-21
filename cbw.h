@@ -13,6 +13,8 @@
 #include <time.h>
 #include <math.h> 
 
+#define CURRENT_VAULT_VERSION  2  /*Update as metadata is added to the vault*/
+
 #define RBW_PATH "/usr/bin/rbw"   /*rust bit warden binary*/
 #define GEN "generate"
 #define CREATE_PW  4

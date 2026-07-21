@@ -10,7 +10,7 @@
 */
 
 /*MACROS*/
-#define SYNC 1
+#define SYNC 0
 /*Global variables*/
 static Vault vault = {0};
 
@@ -358,6 +358,22 @@ static int synchronize_vault(void) {
         }
     }
     free(entry);
+    return SUCCESS;
+}
+
+static int migrate_vault(Entry **entries, size_t *count, int from_version)
+{
+    if(from_version >= CURRENT_VAULT_VERSION) return SUCCESS; /*already up to date*/
+
+    /*Time to move new metadata over*/
+    for(;;/*size_t e = 0; e < *count; e++*/)
+    {
+       /* if ((*entries[e].new_field[0] == '\0'))
+       strcpy((*entries)[e]/new_field, "");
+       */
+    }
+    from_version = CURRENT_VAULT_VERSION;
+
     return SUCCESS;
 }
 // ====================== COMMAND TABLE ======================
