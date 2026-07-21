@@ -642,6 +642,25 @@ int cmd_list(int argc, char **argv)
     return SUCCESS;
 }
 
+int cmd_clear(int argc, char **argv)
+{
+    /*Simple wrapper to clear the clipboard, for security reasons*/
+    
+    (void) argc; (void) argv;
+
+    char cmd[1024];
+    if (system("wl-copy --version > /dev/null 2>&1") == 0) {
+        snprintf(cmd, sizeof(cmd), "wl-copy --clear > /dev/null 2>&1");
+        if(system(cmd) == 0) return SUCCESS;
+    }
+
+    if (system("xclip -version > /dev/null 2>&1") == 0) {
+        snprintf(cmd, sizeof(cmd), "xclip -selection clipboard /dev/null");
+        if(system(cmd) == 0) return SUCCESS;
+    }
+
+    return FAILURE;
+}
 int cmd_edit(int argc, char **argv)
 {
     if (argc < 2) {
