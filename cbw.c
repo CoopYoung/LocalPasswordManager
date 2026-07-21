@@ -10,7 +10,7 @@
 */
 
 /*MACROS*/
-#define SYNC 0
+#define SYNC 1
 /*Global variables*/
 static Vault vault = {0};
 
@@ -104,8 +104,15 @@ static char* rbw_generate(int words)
     }
 
     char* generated = (char*)malloc(256 * sizeof(char));
-    if (!fgets(generated, sizeof(generated), fp)) {
+    if(!generated)
+    {
+        pclose(fp);
+        return NULL;
+    }
+
+    if (!fgets(generated, 256, fp)) {
         fprintf(stderr, "Failed to read password from rbw\n");
+        free(generated);
         pclose(fp);
         return NULL;
     }
@@ -137,12 +144,23 @@ static Entry *json_to_entries(cJSON *root, size_t *out_count) {
 
     for (size_t i = 0; i < count; i++) {
         cJSON *item = cJSON_GetArrayItem(root, i);
-        strncpy(entries[i].label, cJSON_GetStringValue(cJSON_GetObjectItem(item, "label")), 127);
-        strncpy(entries[i].username, cJSON_GetStringValue(cJSON_GetObjectItem(item, "username")), 127);
-        strncpy(entries[i].password, cJSON_GetStringValue(cJSON_GetObjectItem(item, "password")), 255);
-        strncpy(entries[i].time_created, cJSON_GetStringValue(cJSON_GetObjectItem(item, "time_created")), TIME_LEN);
-        cJSON *days_old = cJSON_GetObjectItem(root, "days_old");
-        if(days_old) entries[i].days_old = (long)days_old->valueint;
+
+        const char *label = cJSON_GetStringValue(cJSON_GetObjectItem(item, "label"));
+        const char *username = cJSON_GetStringValue(cJSON_GetObjectItem(item, "username"));
+        const char *password = cJSON_GetStringValue(cJSON_GetObjectItem(item, "password"));
+        const char *time_created = cJSON_GetStringValue(cJSON_GetObjectItem(item, "time_created"));
+
+        if (label) strncpy(entries[i].label, label, sizeof(entries[i].label) - 1);
+        if (username) strncpy(entries[i].username, username, sizeof(entries[i].username) - 1);
+        if (password) strncpy(entries[i].password, password, sizeof(entries[i].password) - 1);
+        if (time_created) strncpy(entries[i].time_created, time_created, TIME_LEN - 1);
+
+        cJSON *days = cJSON_GetObjectItem(item, "days_old");   // ← Fixed: was using root
+        if (cJSON_IsNumber(days)) {
+            entries[i].days_old = (long)days->valuedouble;
+        } else {
+            entries[i].days_old = 0;
+        }
     }
     *out_count = count;
     return entries;
@@ -298,6 +316,12 @@ static int unlock_vault(void) {
 }
 
 static int synchronize_vault(void) {
+
+    if (unlock_vault() != 0) {
+        printf("Sync: could not unlock vault\n");
+        return FAILURE;
+    }
+
     size_t count = 0;
     Entry *entry = load_vault(&count);
 
@@ -308,15 +332,32 @@ static int synchronize_vault(void) {
         return FAILURE;
     } 
 
+    int needs_save = 0;
+
     for(size_t e = 0; e < count; e++)
     {
-        strcpy(entry[e].time_created, "");
-        entry[e].days_old = 0;
-        if(save_vault(entry, count) == 0)
+        if(entry[e].time_created[0] == '\0')
         {
-            printf("Synching the new struct variables: %d\n", (int)count);
+            //leave empty for cmd_audit to complete
+            strcpy(entry[e].time_created, "");
+            entry[e].days_old = 0;
+            needs_save = 1;
         }
     }
+    if(needs_save)
+    {
+        if(save_vault(entry, count) == 0)
+        {
+            printf("Successfully migrated %zu entries: \n", count);
+        }
+        else
+        {
+            printf("Sync: failed to save migrated vault!\n");
+            free(entry);
+            return FAILURE;
+        }
+    }
+    free(entry);
     return SUCCESS;
 }
 // ====================== COMMAND TABLE ======================
@@ -339,10 +380,21 @@ int cmd_init(int argc, char **argv)
         return FAILURE;
     }
 
-    derive_key(pw, vault.salt, vault.key);  // salt generated inside
+    randombytes_buf(vault.salt, SALT_LEN);
+
+    if(derive_key(pw, vault.salt, vault.key) != 0) {
+        fprintf(stderr, "Key derivation failed\n");
+        sodium_memzero(pw, sizeof(pw));
+        return FAILURE;
+    }
+
     sodium_memzero(pw, sizeof(pw));
 
-    save_vault(NULL, 0);  // empty vault
+    if(save_vault(NULL, 0) != 0) {
+        fprintf(stderr, "Failed to create empty vault\n");
+        return FAILURE;
+    }
+
     vault.unlocked = 1;
     printf("Vault initialized at %s\n", expand_path(VAULT_DIR "/" VAULT_FILE));
     return SUCCESS;
@@ -565,10 +617,10 @@ int cmd_list(int argc, char **argv)
     }
 
     printf("Entries (%zu):\n", count);
-    printf("Label           | Username\n");
-    printf("-----------------|-----------------\n");
+    printf("Label           | Username      |   Days Old\n");
+    printf("-----------------|------------------------\n");
     for (size_t i = 0; i < count; i++) {
-        printf("  %s  |  %s\n", entries[i].label, entries[i].username);
+        printf("  %s  |  %s   |    %lu\n", entries[i].label, entries[i].username, entries[i].days_old);
     }
     free(entries);
     return SUCCESS;
