@@ -766,6 +766,7 @@ int cmd_audit(int argc, char **argv)
 
     const char* time_fmt = "%Y-%m-%d";
     strftime(time_buffer, TIME_LEN, time_fmt, curr_time);
+    static long days_old = 0;
     for(size_t e = 0; e < count; e++)
     {
         if(strcmp(entries[e].time_created, "") == 0)
@@ -779,7 +780,8 @@ int cmd_audit(int argc, char **argv)
         }
 
         //For security reasons, update the password, reset the time created 
-        if(days_elapsed(entries[e].time_created, time_buffer, time_fmt) >= DAYS_OLD_LIMIT)
+        days_old = days_elapsed(entries[e].time_created, time_buffer, time_fmt);
+        if(days_old >= DAYS_OLD_LIMIT)
         {
             char* generated = rbw_generate(DEFAULT_PWD_LEN);
             strcpy(entries[e].password, generated);
@@ -789,6 +791,11 @@ int cmd_audit(int argc, char **argv)
             if (save_vault(entries, count) == 0) {
                 printf("Audited entry: %s, password was too old !\n", entries[e].label);
             }
+            continue;
+        }
+        entries[e].days_old = days_old;
+        if (save_vault(entries, count) == 0) {
+            printf("Updated days old of: %s !\n", entries[e].label);
         }
     }
     return SUCCESS;
