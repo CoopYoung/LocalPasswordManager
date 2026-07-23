@@ -652,12 +652,13 @@ int cmd_list(int argc, char **argv)
         return FAILURE;
     }
 
+    int width = 20;
     printf("Entries (%zu):\n", count);
-    printf("Label           | Username      |   Days Old\n");
-    printf("-----------------|------------------------\n");
-    for (size_t i = 0; i < count; i++) {
-        printf("  %s  |  %s   |    %lu\n", entries[i].label, entries[i].username, entries[i].days_old);
-    }
+    printf("%-*s | %-*s | %-*s\n", width, "LABEL", width, "USERNAME", width, "DAYS OLD");
+    printf("%.*s\n", width * 5 + 4, "------------------------------------------------------");    
+    for (size_t i = 0; i < count; i++) 
+    printf("%-*s | %-*s | %-*ld\n", width, entries[i].label, width, entries[i].username, width, entries[i].days_old);
+    
     free(entries);
     return SUCCESS;
 }
