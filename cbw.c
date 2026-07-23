@@ -10,7 +10,8 @@
 */
 
 /*MACROS*/
-#define SYNC 0
+#define SYNC      0
+#define DEBUG     0
 /*Global variables*/
 static Vault vault = {0};
 
@@ -54,6 +55,21 @@ static long days_elapsed(const char *date1, const char *date2, const char *fmt) 
     return (long)round(seconds / 86400.0);
 }
 
+static void initialize_time_entries(Entry *new_e)
+{
+    if(new_e == NULL) return;
+
+    new_e->days_old = 0L;
+
+    time_t rawtime = time(NULL);
+    struct tm* curr_time = localtime(&rawtime);;
+    char time_buffer[TIME_LEN];
+
+    const char* time_fmt = "%Y-%m-%d";
+    strftime(time_buffer, TIME_LEN, time_fmt, curr_time);
+    strcpy(new_e->time_created, time_buffer);
+
+}
 static int derive_key(const char *pw, const unsigned char *salt, unsigned char *key) {
     if (sodium_init() < 0) return -1;
     return crypto_pwhash(key, KEY_LEN, pw, strlen(pw),
@@ -232,7 +248,7 @@ static int save_vault(Entry *entries, size_t count) {
     }
 
     free(ct);
-    printf("Debug: Vault saved successfully (%zu entries)\n", count);
+    if(DEBUG) printf("Debug: Vault saved successfully (%zu entries)\n", count);
     return 0;
 }
 
@@ -505,6 +521,8 @@ int cmd_gen(int argc, char **argv)
     strncpy(new_e->password, generated, sizeof(new_e->password) - 1);
     new_e->password[sizeof(new_e->password)-1] = '\0';
 
+    initialize_time_entries(new_e);
+
     if (save_vault(entries, count + 1) == 0) {
         printf("Saved entry for %s\n", label);
         copy_to_clipboard(generated);
@@ -604,6 +622,8 @@ int cmd_insert(int argc, char **argv)
     strncpy(new_e->password, password, sizeof(new_e->password) - 1);
     new_e->password[sizeof(new_e->password)-1] = '\0';
 
+    initialize_time_entries(new_e);
+
     if (save_vault(entries, count + 1) == 0) {
         printf("Inserted entry for %s\n", label);
     } else {
@@ -663,6 +683,8 @@ int cmd_clear(int argc, char **argv)
 }
 int cmd_edit(int argc, char **argv)
 {
+    //TODO: allow editing of days_old or time_created
+
     if (argc < 2) {
         fprintf(stderr, "Usage: %s edit <label>\n", PROGRAM_NAME);
         return FAILURE;
@@ -774,7 +796,7 @@ int cmd_audit(int argc, char **argv)
             strcpy(entries[e].time_created, time_buffer);
             entries[e].days_old = 0L; 
             if (save_vault(entries, count) == 0) {
-                printf("Created time entry for %s\n", entries[e].label);
+                if(DEBUG) printf("Created time entry for %s\n", entries[e].label);
             }
             continue;
         }
@@ -795,7 +817,7 @@ int cmd_audit(int argc, char **argv)
         }
         entries[e].days_old = days_old;
         if (save_vault(entries, count) == 0) {
-            printf("Updated days old of: %s !\n", entries[e].label);
+            if(DEBUG) printf("Updated days old of: %s !\n", entries[e].label);
         }
     }
     return SUCCESS;
