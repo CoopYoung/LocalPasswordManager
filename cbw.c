@@ -575,6 +575,7 @@ int cmd_get(int argc, char **argv)
                 printf("Label:    %s\n", entries[i].label);
                 printf("Username: %s\n", entries[i].username);
                 printf("Password: %s\n", entries[i].password);
+                printf("Days Old: %d\n", entries[i].days_old);
             }
             sodium_memzero(entries[i].password, sizeof(entries[i].password));
             free(entries);
@@ -766,6 +767,96 @@ int cmd_delete(int argc, char **argv)
     printf("Entry '%s' not found\n", argv[1]);
     free(entries);
     return FAILURE;
+}
+
+int cmd_update(int argc, char **argv)
+{
+    char label[128] = {0};
+    char password[256] = {0};
+
+    static struct option long_opts[] = {
+        {"label",    required_argument, 0, 'l'},
+        {"password", required_argument, 0, 'p'},  // -pw maps to 'p'
+        {"help",     no_argument,       0, 'h'},
+        {0, 0, 0, 0}
+    };
+
+    int opt;
+    optind = 1;  // reset for subcommand
+
+    while ((opt = getopt_long(argc, argv, "l:p:h", long_opts, NULL)) != -1) {
+        switch (opt) {
+            case 'l':
+                strncpy(label, optarg, sizeof(label) - 1);
+                label[sizeof(label) - 1] = '\0';
+                break;
+            case 'p':
+                strncpy(password, optarg, sizeof(password) - 1);
+                password[sizeof(password) - 1] = '\0';
+                break;
+            case 'h':
+                printf("Usage: %s update -l <label> -pw <password>\n", PROGRAM_NAME);
+                return SUCCESS;
+            default:
+                fprintf(stderr, "Usage: %s update -l <label> -pw <password>\n", PROGRAM_NAME);
+                return FAILURE;
+        }
+    }
+
+    // Validate required arguments
+    if (label[0] == '\0' || password[0] == '\0') {
+        fprintf(stderr, "Error: both -l <label> and -pw <password> are required\n");
+        fprintf(stderr, "Usage: %s update -l <label> -pw <password>\n", PROGRAM_NAME);
+        return FAILURE;
+    }
+
+    if (unlock_vault() != 0)
+        return FAILURE;
+
+    size_t count = 0;
+    Entry *entries = load_vault(&count);
+    if (!entries || count == 0) {
+        fprintf(stderr, "No entries found in vault.\n");
+        free(entries);
+        return FAILURE;
+    }
+
+    int found = 0;
+    for (size_t i = 0; i < count; i++) 
+    {
+        if (strcmp(entries[i].label, label) == 0) 
+        {
+            // Update the password
+            strncpy(entries[i].password, password, sizeof(entries[i].password) - 1);
+            entries[i].password[sizeof(entries[i].password) - 1] = '\0';
+            Entry *new_e = &entries[i];
+            initialize_time_entries(new_e);
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        fprintf(stderr, "Entry with label '%s' not found.\n", label);
+        free(entries);
+        sodium_memzero(password, sizeof(password));
+        return FAILURE;
+    }
+
+    if (save_vault(entries, count) == 0) {
+        printf("Updated password for '%s'\n", label);
+        // Optional: copy new password to clipboard
+        // copy_to_clipboard(password);
+    } else {
+        fprintf(stderr, "Failed to save updated vault\n");
+        free(entries);
+        sodium_memzero(password, sizeof(password));
+        return FAILURE;
+    }
+
+    free(entries);
+    sodium_memzero(password, sizeof(password));
+    return SUCCESS;
 }
 
 int cmd_audit(int argc, char **argv)

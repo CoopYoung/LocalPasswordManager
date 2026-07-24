@@ -81,6 +81,7 @@ int cmd_get(int argc, char **argv);
 int cmd_list(int argc, char **argv);
 int cmd_clear(int argc, char **argv);
 int cmd_edit(int argc, char **argv);
+int cmd_update(int argc, char **argv);
 int cmd_delete(int argc, char **argv);
 int cmd_insert(int argc, char **argv);
 int cmd_audit(int argc, char **argv);
@@ -107,6 +108,7 @@ static const struct command commands[] = {
     {"list",    "List all entries (labels + usernames)",            cmd_list},
     {"clear",   "Clear clipboard",                                  cmd_clear},
     {"edit",    "Edit a password, provided a label",                cmd_edit},
+    {"update",  "Update an old passsword, provided a label",        cmd_update},
     {"delete",  "Delete an entry",                                  cmd_delete},
     {"audit",   "Checks the health of each pwd, updates if too old",cmd_audit},
     {"help",    "Show this help",                                   cmd_help},
